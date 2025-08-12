@@ -1,0 +1,39 @@
+name: Deploy to rshelopal.site
+
+on:
+  push:
+    branches: [ main ]   # deploy every push to main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # If you have a build step (e.g., Vite/React), uncomment and adjust:
+      # - name: Build
+      #   run: |
+      #     npm ci
+      #     npm run build
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT || 22 }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Rsync to server
+        run: |
+          SRC="./"    # change to ./dist or ./build if you used a build step
+          rsync -az --delete \
+            --exclude ".git" --exclude ".github" \
+            -e "ssh -i ~/.ssh/id_ed25519 -p ${{ secrets.DEPLOY_PORT || 22 }}" \
+            "$SRC"  "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}"
+
+      - name: Reload Apache
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p "${{ secrets.DEPLOY_PORT || 22 }}" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            'sudo systemctl reload apache2'
